@@ -11,6 +11,14 @@ sandbox sessions, then runs normal Crabbox sync/commands over SSH through
 Tenki's sandbox SSH WebSocket proxy using the Tenki-managed SSH key and
 per-session cert.
 
+When the Tenki CLI reports a `known_hosts_file`, Crabbox treats that file as
+authoritative. Gateway certificates signed by its trusted CA can rotate without
+enrolling individual leaf keys. Unknown, removed, or missing trust fails closed;
+Crabbox does not add keys or consult other host-trust sources. Each new SSH
+connection rereads the file instead of reusing a multiplexed connection. Existing
+connections are not retroactively revoked. Older CLIs that omit the file keep
+the existing per-session trust-on-first-use behavior.
+
 ## When To Use
 
 Use Tenki when the remote Linux machine should be a Tenki sandbox session but

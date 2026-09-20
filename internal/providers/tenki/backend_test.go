@@ -890,6 +890,11 @@ func TestTenkiSSHTargetKnownHostsFile(t *testing.T) {
 			reported: "",
 			want:     "/tmp/known_hosts_00000000-0000-0000-0000-000000000001",
 		},
+		{
+			name:     "blank reported path keeps legacy trust",
+			reported: " \t ",
+			want:     "/tmp/known_hosts_00000000-0000-0000-0000-000000000001",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target := backend.sshTarget(tenkiSSHCommandOutput{
@@ -904,6 +909,12 @@ func TestTenkiSSHTargetKnownHostsFile(t *testing.T) {
 			})
 			if target.KnownHostsFile != tc.want {
 				t.Fatalf("known_hosts=%q want=%q", target.KnownHostsFile, tc.want)
+			}
+			if target.AuthoritativeKnownHosts != (strings.TrimSpace(tc.reported) != "") {
+				t.Fatalf("unexpected authoritative trust mode: %#v", target)
+			}
+			if target.HostKeyAlias != "" || target.SSHHostKey != "" || target.DisableHostKeyChecking {
+				t.Fatalf("provider certificate trust was replaced: %#v", target)
 			}
 		})
 	}

@@ -875,16 +875,17 @@ func (b *tenkiBackend) sshTarget(output tenkiSSHCommandOutput) core.SSHTarget {
 		port = strconv.Itoa(output.Port)
 	}
 	return core.SSHTarget{
-		User:            core.Blank(strings.TrimSpace(output.User), "tenki"),
-		Host:            core.Blank(strings.TrimSpace(output.Host), "sandbox"),
-		Key:             output.IdentityFile,
-		CertificateFile: output.CertificateFile,
-		KnownHostsFile:  core.Blank(strings.TrimSpace(output.KnownHostsFile), tenkiKnownHostsFile(output)),
-		Port:            port,
-		TargetOS:        targetLinux,
-		NetworkKind:     networkPublic,
-		SSHConfigProxy:  true,
-		ProxyCommand:    tenkiOpenSSHProxyCommand(output.ProxyCommand),
+		User:                    core.Blank(strings.TrimSpace(output.User), "tenki"),
+		Host:                    core.Blank(strings.TrimSpace(output.Host), "sandbox"),
+		Key:                     output.IdentityFile,
+		CertificateFile:         output.CertificateFile,
+		KnownHostsFile:          core.Blank(strings.TrimSpace(output.KnownHostsFile), tenkiKnownHostsFile(output)),
+		AuthoritativeKnownHosts: strings.TrimSpace(output.KnownHostsFile) != "",
+		Port:                    port,
+		TargetOS:                targetLinux,
+		NetworkKind:             networkPublic,
+		SSHConfigProxy:          true,
+		ProxyCommand:            tenkiOpenSSHProxyCommand(output.ProxyCommand),
 	}
 }
 
