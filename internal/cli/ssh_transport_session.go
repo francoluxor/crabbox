@@ -985,7 +985,7 @@ func renderSSHTransportConfigWithRoute(target SSHTarget, localForward bool, rout
 	if hostKeyAlias != "" {
 		writeSSHTransportLiteralConfigValue(&b, "HostKeyAlias", hostKeyAlias)
 	}
-	if target.HostKeyAlias != "" || strings.TrimSpace(target.SSHHostKey) != "" {
+	if !target.AuthoritativeKnownHosts && (target.HostKeyAlias != "" || strings.TrimSpace(target.SSHHostKey) != "") {
 		writeSSHTransportLiteralConfigValue(&b, "HostKeyAlgorithms", sshHostKeyAlgorithms(target))
 	}
 	if proxyCommand != "" {

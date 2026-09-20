@@ -36,7 +36,7 @@ func TestAuthoritativeKnownHostsCertificatesWithOpenSSH(t *testing.T) {
 		return signer
 	}
 	trustedCA, otherCA := newSigner(), newSigner()
-	for _, transport := range []string{"argv", "config"} {
+	for _, transport := range []string{"argv", "config", "argv-alias", "config-alias"} {
 		t.Run(transport, func(t *testing.T) {
 			isolateTestUserDirs(t)
 			knownHosts := filepath.Join(t.TempDir(), "known_hosts")
@@ -64,7 +64,7 @@ func TestAuthoritativeKnownHostsCertificatesWithOpenSSH(t *testing.T) {
 					}
 					leaf := newSigner()
 					cert := &ssh.Certificate{Key: leaf.PublicKey(), CertType: ssh.HostCert,
-						ValidPrincipals: []string{"127.0.0.1"}, ValidBefore: ssh.CertTimeInfinity}
+						ValidPrincipals: []string{"127.0.0.1", "gateway.example.test"}, ValidBefore: ssh.CertTimeInfinity}
 					if err := cert.SignCert(rand.Reader, scenario.ca); err != nil {
 						t.Fatal(err)
 					}
@@ -77,9 +77,12 @@ func TestAuthoritativeKnownHostsCertificatesWithOpenSSH(t *testing.T) {
 					close(server.release)
 					target := SSHTarget{User: "synthetic-certificate-trust", Host: "127.0.0.1", Port: strconv.Itoa(server.port()),
 						KnownHostsFile: knownHosts, AuthoritativeKnownHosts: true}
+					if strings.HasSuffix(transport, "-alias") {
+						target.HostKeyAlias = "gateway.example.test"
+					}
 					args := append(sshBaseArgs(target), "-F", os.DevNull)
 					destination := target.User + "@" + target.Host
-					if transport == "config" {
+					if strings.HasPrefix(transport, "config") {
 						config, err := renderSSHTransportConfig(target, false)
 						if err != nil {
 							t.Fatal(err)

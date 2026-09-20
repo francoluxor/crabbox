@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	posixpath "path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -166,7 +165,9 @@ func (b *tenkiBackend) Acquire(ctx context.Context, req core.AcquireRequest) (co
 		if req.Keep {
 			return
 		}
-		terminate := func() error { return b.terminateSessionAcknowledged(context.Background(), session.ID) }
+		// Failed-acquisition cleanup deliberately outlives the acquisition context.
+		cleanupCtx := context.Background()
+		terminate := func() error { return b.terminateSessionAcknowledged(cleanupCtx, session.ID) }
 		if !claimed {
 			_ = terminate()
 			return
@@ -174,7 +175,7 @@ func (b *tenkiBackend) Acquire(ctx context.Context, req core.AcquireRequest) (co
 		binding := b.claimBinding(leaseID, slug, session.ID)
 		claim, err := shared.RequireExactClaim(binding)
 		if err == nil {
-			_ = shared.RemoveExactClaimAfter(claim, binding, terminate)
+			_ = shared.RemoveExactClaimAfterContext(cleanupCtx, claim, binding, terminate)
 		}
 	}
 	server := b.sessionToServer(cfg, session, leaseID, slug, req.Keep)
@@ -320,7 +321,7 @@ func (b *tenkiBackend) ReleaseLease(ctx context.Context, req core.ReleaseLeaseRe
 	if err != nil {
 		return err
 	}
-	if err := shared.RemoveExactClaimAfter(claim, binding, func() error {
+	if err := shared.RemoveExactClaimAfterContext(ctx, claim, binding, func() error {
 		session, err := b.getSession(ctx, sessionID)
 		if err != nil {
 			return err
@@ -406,12 +407,8 @@ func (b *tenkiBackend) createSession(ctx context.Context, cfg core.Config, name,
 	}
 	if keep {
 		args = append(args, "--sticky")
-	}
-	if cfg.TTL > 0 {
+	} else if cfg.TTL > 0 {
 		args = append(args, "--max-duration", cfg.TTL.String())
-	}
-	if cfg.IdleTimeout > 0 {
-		args = append(args, "--idle-timeout", cfg.IdleTimeout.String())
 	}
 	if cfg.Tenki.CPUs > 0 {
 		args = append(args, "--cpu", strconv.Itoa(cfg.Tenki.CPUs))
@@ -468,7 +465,11 @@ func (b *tenkiBackend) resolveSSHTarget(ctx context.Context, cfg core.Config, se
 	if err != nil {
 		return core.SSHTarget{}, err
 	}
-	target := b.sshTarget(sshCommand)
+	knownHosts, alias, err := b.prepareSSHAuthority(ctx, cfg, sshCommand)
+	if err != nil {
+		return core.SSHTarget{}, err
+	}
+	target := b.sshTarget(sshCommand, knownHosts, alias)
 	target.ReadyCheck = "command -v git >/dev/null && command -v rsync >/dev/null && command -v tar >/dev/null && command -v python3 >/dev/null"
 	return target, nil
 }
@@ -869,7 +870,7 @@ func (o tenkiSSHCommandOutput) validate(sessionID string) error {
 	return nil
 }
 
-func (b *tenkiBackend) sshTarget(output tenkiSSHCommandOutput) core.SSHTarget {
+func (b *tenkiBackend) sshTarget(output tenkiSSHCommandOutput, knownHosts, alias string) core.SSHTarget {
 	port := "22"
 	if output.Port > 0 {
 		port = strconv.Itoa(output.Port)
@@ -879,23 +880,15 @@ func (b *tenkiBackend) sshTarget(output tenkiSSHCommandOutput) core.SSHTarget {
 		Host:                    core.Blank(strings.TrimSpace(output.Host), "sandbox"),
 		Key:                     output.IdentityFile,
 		CertificateFile:         output.CertificateFile,
-		KnownHostsFile:          core.Blank(strings.TrimSpace(output.KnownHostsFile), tenkiKnownHostsFile(output)),
-		AuthoritativeKnownHosts: strings.TrimSpace(output.KnownHostsFile) != "",
+		KnownHostsFile:          knownHosts,
+		HostKeyAlias:            alias,
+		AuthoritativeKnownHosts: true,
 		Port:                    port,
 		TargetOS:                targetLinux,
 		NetworkKind:             networkPublic,
 		SSHConfigProxy:          true,
 		ProxyCommand:            tenkiOpenSSHProxyCommand(output.ProxyCommand),
 	}
-}
-
-func tenkiKnownHostsFile(output tenkiSSHCommandOutput) string {
-	dir := filepath.Dir(output.IdentityFile)
-	session := core.NormalizeLeaseSlug(output.SessionID)
-	if session == "" {
-		session = "sandbox"
-	}
-	return filepath.Join(dir, "known_hosts_"+session)
 }
 
 func tenkiOpenSSHProxyCommand(command string) string {

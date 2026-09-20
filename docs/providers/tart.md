@@ -125,6 +125,12 @@ stop/delete of the new clone. `--keep` preserves a VM only after acquisition
 succeeds. After success, kept VMs survive caller cancellation; non-kept VMs
 remain tied to the caller's context.
 
+Failed acquisition removes generated SSH credentials and host-trust files only
+after ownership-verified VM rollback and any published-claim cleanup succeed.
+Uncertain cloning, ownership changes, or failed deletion/claim cleanup retain
+the SSH material for recovery. Local artifact-cleanup errors are reported
+alongside the original acquisition failure rather than silently discarded.
+
 ## Built-in image identity
 
 New leases without an image override use the immutable Sequoia image above.
@@ -169,6 +175,10 @@ otherwise Crabbox uses `~/.tart` and passes that same directory to Tart.
 The claim lock covers fresh inventory and marker checks, any required stop,
 deletion, and durable claim removal. A changed claim, missing or replaced marker,
 duplicate claim, different store, or inventory failure prevents deletion.
+Waiting for that lock honors cleanup cancellation, including when pruning a
+missing VM's claim. Cancellation stops the remaining scan rather than being
+treated as an ordinary stale-claim skip; confirmed successful deletion still
+finishes claim retirement.
 Legacy claims without this binding are retained for explicit operator inspection;
 they are not silently upgraded by cleanup. Inspect such VMs with Tart before
 choosing any manual `tart stop <name>` / `tart delete <name>` operation.

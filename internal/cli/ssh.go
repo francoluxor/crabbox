@@ -1380,7 +1380,9 @@ func sshHostKeyVerificationArgs(target SSHTarget) []string {
 		args = append(args,
 			"-o", "HostKeyAlias="+target.HostKeyAlias,
 		)
-		args = append(args, "-o", "HostKeyAlgorithms="+sshHostKeyAlgorithms(target))
+		if !target.AuthoritativeKnownHosts {
+			args = append(args, "-o", "HostKeyAlgorithms="+sshHostKeyAlgorithms(target))
+		}
 	}
 	return args
 }
